@@ -1,8 +1,8 @@
 import argparse
 import os
 import random
-import time
 import warnings
+import const
 
 import torch
 import torch.nn as nn
@@ -17,11 +17,8 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
 
-from progress_meter import ProgressMeter
-from average_meter import AverageMeter
-from util import adjust_learning_rate, save_checkpoint, accuracy
-
-from trainer import train, validate
+from trainer import Trainer
+from LearningRateFactorDecreaser import LearningRateFactorDecreaser
 
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
@@ -78,6 +75,10 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'N processes per node, which has N GPUs. This is the '
                          'fastest way to use PyTorch for either single node or '
                          'multi node data parallel training')
+parser.add_argument('--learning-rate-decrease-factor', type=int, default=0.1,
+                    help='The decrease factor to use on learning rate every X epochs')
+parser.add_argument('--learning-rate-decrease-epoch', type=int, default=30,
+                    help='Number of epochs, after which to decrease the LR by the factor')
 
 best_acc1 = 0
 
@@ -207,13 +208,13 @@ def main_worker(gpu, ngpus_per_node, args):
     # Data loading code
     traindir = os.path.join(args.data, 'train')
     valdir = os.path.join(args.data, 'val')
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
+    normalize = transforms.Normalize(mean=const.RGB_MEAN,
+                                     std=const.RGB_STD)
 
     train_dataset = datasets.ImageFolder(
         traindir,
         transforms.Compose([
-            transforms.RandomResizedCrop(224),
+            transforms.RandomResizedCrop(const.CROP_SIZE),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize,
@@ -230,42 +231,24 @@ def main_worker(gpu, ngpus_per_node, args):
 
     val_loader = torch.utils.data.DataLoader(
         datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+            transforms.Resize(const.MODEL_INPUT_SIZE),
+            transforms.CenterCrop(const.CROP_SIZE),
             transforms.ToTensor(),
             normalize,
         ])),
         batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
+    optimizer_adjuster = LearningRateFactorDecreaser(args.learning_rate_decrease_factor,
+                                                     args.learning_rate_decrease_epochs)
+
+    trainer = Trainer(train_loader, model, criterion, optimizer, optimizer_adjuster, args, train_sampler=train_sampler)
+
     if args.evaluate:
-        validate(val_loader, model, criterion, args)
+        trainer.validate()
         return
 
-    for epoch in range(args.start_epoch, args.epochs):
-        if args.distributed:
-            train_sampler.set_epoch(epoch)
-        adjust_learning_rate(optimizer, epoch, args)
-
-        # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, args)
-
-        # evaluate on validation set
-        acc1 = validate(val_loader, model, criterion, args)
-
-        # remember best acc@1 and save checkpoint
-        is_best = acc1 > best_acc1
-        best_acc1 = max(acc1, best_acc1)
-
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                and args.rank % ngpus_per_node == 0):
-            save_checkpoint({
-                'epoch': epoch + 1,
-                'arch': args.arch,
-                'state_dict': model.state_dict(),
-                'best_acc1': best_acc1,
-                'optimizer': optimizer.state_dict(),
-            }, is_best)
+    trainer.train_model()
 
 
 if __name__ == '__main__':
