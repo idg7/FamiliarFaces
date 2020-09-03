@@ -242,7 +242,7 @@ def main_worker(gpu, ngpus_per_node, args):
     optimizer_adjuster = LearningRateFactorDecreaser(args.learning_rate_decrease_factor,
                                                      args.learning_rate_decrease_epochs)
 
-    trainer = Trainer(train_loader, model, criterion, optimizer, optimizer_adjuster, args, train_sampler=train_sampler)
+    trainer = Trainer(train_loader, val_loader, model, criterion, optimizer, optimizer_adjuster, args, train_sampler=train_sampler)
 
     if args.evaluate:
         trainer.validate()

@@ -7,8 +7,9 @@ from util import save_checkpoint
 
 
 class Trainer(object):
-    def __init__(self, train_loader, model, criterion, optimizer, optimizer_adjuster, args, train_sampler=None):
+    def __init__(self, train_loader, val_loader, model, criterion, optimizer, optimizer_adjuster, args, train_sampler=None):
         self.train_loader = train_loader
+        self.val_loader = val_loader
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
