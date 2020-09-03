@@ -240,7 +240,7 @@ def main_worker(gpu, ngpus_per_node, args):
         num_workers=args.workers, pin_memory=True)
 
     optimizer_adjuster = LearningRateFactorDecreaser(args.learning_rate_decrease_factor,
-                                                     args.learning_rate_decrease_epochs)
+                                                     args.learning_rate_decrease_epoch)
 
     trainer = Trainer(train_loader, val_loader, model, criterion, optimizer, optimizer_adjuster, args, train_sampler=train_sampler)
 
