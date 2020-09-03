@@ -248,7 +248,7 @@ def main_worker(gpu, ngpus_per_node, args):
         trainer.validate()
         return
 
-    trainer.train_model()
+    trainer.train_model(args.start_epoch, args.epochs)
 
 
 if __name__ == '__main__':
